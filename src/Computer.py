@@ -24,12 +24,12 @@ class OperatingSystem:
         self.CPU = simpy.Resource(env, capacity=CPU_QUANTITY)
 
     def allocate_memory(self, name, required_memory):
-        """Asigna la memoria requerida para el proceso."""
+        #Asigna la memoria requerida para el proceso."""
         yield self.RAM.get(required_memory)
         print(f'{self.env.now}: El proceso {name} ha obtenido {required_memory} de RAM')
 
     def execute_process(self, name, total_instructions):
-        """Ejecuta las instrucciones del proceso en la CPU."""
+        #Ejecuta las instrucciones del proceso en la CPU."""
         while total_instructions > 0:
             with self.CPU.request() as req:
                 yield req
@@ -37,7 +37,7 @@ class OperatingSystem:
                 total_instructions -= executed_instructions
 
     def perform_cpu_cycle(self, name, total_instructions):
-        """Realiza un ciclo de CPU, ejecutando instrucciones y retornando el número de instrucciones ejecutadas."""
+        #Realiza un ciclo de CPU, ejecutando instrucciones y retornando el número de instrucciones ejecutadas."""
         print(f'{self.env.now}: El proceso {name} ha comenzado su ejecución en CPU')
         yield self.env.timeout(CPU_SPEED)
         executed_instructions = min(INSTRUCTIONS_PER_CYCLE, total_instructions)
@@ -45,7 +45,7 @@ class OperatingSystem:
         return executed_instructions
 
     def check_for_waiting(self, name, total_instructions):
-        """Verifica si el proceso necesita esperar debido a operaciones de I/O."""
+        #Verifica si el proceso necesita esperar debido a operaciones de I/O
         if total_instructions > 0:
             event = random.randint(1, 2)
             if event == 1:
@@ -54,7 +54,7 @@ class OperatingSystem:
             print(f'{self.env.now}: El proceso {name} está listo para continuar')
 
     def release_memory(self, name, required_memory):
-        """Libera la memoria utilizada por el proceso."""
+        #Libera la memoria utilizada por el proceso.
         yield self.RAM.put(required_memory)
         print(f'{self.env.now}: El proceso {name} ha liberado {required_memory} de RAM')
 
@@ -70,7 +70,7 @@ class OperatingSystem:
         print(f'{self.env.now}: El proceso {name} ha terminado')
 
 def gen_process(env, os):
-    """Generador de procesos para la simulación."""
+    #Generador de procesos para la simulación
     for i in range(PROCESS_QUANTITY):
         required_memory = random.randint(1, 10)
         total_instructions = random.randint(1, 10)

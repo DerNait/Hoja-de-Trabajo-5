@@ -3,9 +3,9 @@ import random
 import matplotlib.pyplot as plt
 import numpy as np
 
-# Parametros de simulacion
+# Parámetros de simulación
 RANDOM_SEED = 42
-SIMULATION_TIME = 5000
+SIMULATION_TIME = 500
 PROCESS_CREATION_INTERVAL = 10
 RAM_CAPACITY = 100
 INSTRUCTIONS_PER_CYCLE = 3
@@ -13,52 +13,75 @@ CPU_SPEED = 1
 CPU_QUANTITY = 1 
 PROCESS_QUANTITY = 25
 
-random.seed(RANDOM_SEED) # Se utiliza la seed para asegurarme que todo salga igual en la ejecucion
+random.seed(RANDOM_SEED) # Se utiliza la seed para asegurarme que todo salga igual en la ejecución
 
 process_durations = []  # Almacenará la duración de cada proceso
 
 class OperatingSystem:
     def __init__(self, env):
+        self.env = env
         self.RAM = simpy.Container(env, init=RAM_CAPACITY, capacity=RAM_CAPACITY)
         self.CPU = simpy.Resource(env, capacity=CPU_QUANTITY)
-        self.env = env
 
-    def process(self, name, required_memory, total_instructions):
-        start_time = self.env.now  # Tiempo de inicio
+    def allocate_memory(self, name, required_memory):
+        """Asigna la memoria requerida para el proceso."""
         yield self.RAM.get(required_memory)
         print(f'{self.env.now}: El proceso {name} ha obtenido {required_memory} de RAM')
 
+    def execute_process(self, name, total_instructions):
+        """Ejecuta las instrucciones del proceso en la CPU."""
         while total_instructions > 0:
             with self.CPU.request() as req:
                 yield req
-                print(f'{self.env.now}: El proceso {name} ha comenzado su ejecución en CPU')
-                yield self.env.timeout(CPU_SPEED)
-                total_instructions -= min(INSTRUCTIONS_PER_CYCLE, total_instructions)
-                print(f'{self.env.now}: El proceso {name} ha completado instrucciones, {total_instructions} restantes')
+                executed_instructions = yield self.env.process(self.perform_cpu_cycle(name, total_instructions))
+                total_instructions -= executed_instructions
 
-            if total_instructions > 0:  # Aqui decidira si ir estar en waiting o ready
-                event = random.randint(1, 2)
-                if event == 1:
-                    print(f'{self.env.now}: El proceso {name} ha pasado a waiting')
-                    yield self.env.timeout(1)  # Simulate waiting time for I/O
-                print(f'{self.env.now}: El proceso {name} está listo para continuar')
-        
+    def perform_cpu_cycle(self, name, total_instructions):
+        """Realiza un ciclo de CPU, ejecutando instrucciones y retornando el número de instrucciones ejecutadas."""
+        print(f'{self.env.now}: El proceso {name} ha comenzado su ejecución en CPU')
+        yield self.env.timeout(CPU_SPEED)
+        executed_instructions = min(INSTRUCTIONS_PER_CYCLE, total_instructions)
+        print(f'{self.env.now}: El proceso {name} ha completado instrucciones, {total_instructions - executed_instructions} restantes')
+        return executed_instructions
+
+    def check_for_waiting(self, name, total_instructions):
+        """Verifica si el proceso necesita esperar debido a operaciones de I/O."""
+        if total_instructions > 0:
+            event = random.randint(1, 2)
+            if event == 1:
+                print(f'{self.env.now}: El proceso {name} ha pasado a waiting')
+                yield self.env.timeout(1)
+            print(f'{self.env.now}: El proceso {name} está listo para continuar')
+
+    def release_memory(self, name, required_memory):
+        """Libera la memoria utilizada por el proceso."""
+        yield self.RAM.put(required_memory)
+        print(f'{self.env.now}: El proceso {name} ha liberado {required_memory} de RAM')
+
+    def process(self, name, required_memory, total_instructions):
+        start_time = self.env.now
+        yield self.env.process(self.allocate_memory(name, required_memory))
+        yield self.env.process(self.execute_process(name, total_instructions))
+        # Aquí se debe verificar si hay instrucciones restantes para decidir si se espera o no.
+        if total_instructions > 0:
+            yield self.env.process(self.check_for_waiting(name, total_instructions))
+        process_durations.append(self.env.now - start_time)
+        yield self.env.process(self.release_memory(name, required_memory))
         print(f'{self.env.now}: El proceso {name} ha terminado')
-        end_time = self.env.now  # Tiempo de finalización
-        process_durations.append(end_time - start_time)  # Añadir la duración del proceso
-        self.RAM.put(required_memory)
 
-def process_generator(env, os):
+def gen_process(env, os):
+    """Generador de procesos para la simulación."""
     for i in range(PROCESS_QUANTITY):
         required_memory = random.randint(1, 10)
         total_instructions = random.randint(1, 10)
-        env.process(os.process(f'Proceso {i}', required_memory, total_instructions))
+        process_name = f'Proceso {i}'
+        env.process(os.process(process_name, required_memory, total_instructions))
         yield env.timeout(random.expovariate(1.0 / PROCESS_CREATION_INTERVAL))
 
-# Inicia la simulacion
+# Inicia la simulación
 env = simpy.Environment()
 os = OperatingSystem(env)
-env.process(process_generator(env, os))
+env.process(gen_process(env, os))
 env.run(until=SIMULATION_TIME)
 
 # Cálculo de promedio y desviación estándar
